@@ -357,6 +357,55 @@ let posts = [
   {id:5,date:"2025年4月15日",dateObj:new Date(2025,3,15),tag:"画像生成",title:"LoRAファインチューニングを初めて試した",body:"<p>Stable DiffusionのLoRAを使ってオリジナルキャラクターのスタイルを学習させた。</p><ul><li>学習画像：20枚で十分</li><li>ステップ数：<strong>1000くらい</strong>が丁度いい</li></ul>",img:"",reactions:{like:9,heart:6,helpful:4,fire:5},comments:[],aiComment:""}
 ];
 
+// ===== localStorage 保存・読み込み =====
+const STORAGE_POSTS = 'diary_posts';
+const STORAGE_NEXTID = 'diary_nextid';
+const STORAGE_REACTIONS = 'diary_reactions';
+const STORAGE_CAT = 'diary_cat';
+
+function savePosts() {
+  // dateObjはJSON化できないので文字列に変換して保存
+  const data = posts.map(p => ({...p, dateObj: p.dateObj ? p.dateObj.toISOString() : null}));
+  try { localStorage.setItem(STORAGE_POSTS, JSON.stringify(data)); } catch(e) {
+    alert('保存容量が不足しています。古い記事の画像を削除するか、画像サイズを小さくしてください。');
+  }
+  localStorage.setItem(STORAGE_NEXTID, nextId);
+}
+
+function loadPosts() {
+  const raw = localStorage.getItem(STORAGE_POSTS);
+  if (!raw) return; // 初回はデフォルトデータをそのまま使う
+  try {
+    const data = JSON.parse(raw);
+    posts = data.map(p => ({...p, dateObj: p.dateObj ? new Date(p.dateObj) : new Date()}));
+    nextId = parseInt(localStorage.getItem(STORAGE_NEXTID) || '6');
+  } catch(e) { console.error('投稿データの読み込みに失敗しました', e); }
+}
+
+function saveReactions() {
+  try { localStorage.setItem(STORAGE_REACTIONS, JSON.stringify(userReactions)); } catch(e) {}
+}
+
+function loadReactions() {
+  const raw = localStorage.getItem(STORAGE_REACTIONS);
+  if (raw) try { userReactions = JSON.parse(raw); } catch(e) {}
+}
+
+function saveCatImg(src) {
+  try { localStorage.setItem(STORAGE_CAT, src); } catch(e) {
+    alert('猫の画像が大きすぎて保存できませんでした。もう少し小さい画像をお試しください。');
+  }
+}
+
+function loadCatImg() {
+  const src = localStorage.getItem(STORAGE_CAT);
+  if (!src) return;
+  const img = document.getElementById('cat-img');
+  const ph  = document.getElementById('cat-placeholder');
+  if (img) { img.src = src; img.style.display = 'block'; }
+  if (ph)  ph.style.display = 'none';
+}
+
 // ===== エディタ =====
 function fmt(cmd) {
   document.getElementById('editor-area').focus();
@@ -522,6 +571,8 @@ function react(postId,type) {
   if(!p) return;
   if(userReactions[k]){p.reactions[type]--;delete userReactions[k];}
   else{p.reactions[type]++;userReactions[k]=true;}
+  savePosts();
+  saveReactions();
   renderPosts();
 }
 
@@ -536,6 +587,7 @@ function submitComment(postId){
   const now=new Date();
   p.comments.push({author:"ゲスト",text,date:`${now.getMonth()+1}/${now.getDate()}`});
   openComments[postId]=true;
+  savePosts();
   renderPosts();
 }
 
@@ -543,6 +595,7 @@ function submitComment(postId){
 function deletePost(postId){
   if(!confirm("この記事を削除しますか？")) return;
   posts=posts.filter(p=>p.id!==postId);
+  savePosts();
   renderPosts();
 }
 
@@ -565,8 +618,8 @@ async function handleCatImg(event){
   function showCatImg(src){const img=document.getElementById('cat-img');const ph=document.getElementById('cat-placeholder');if(img){img.src=src;img.style.display='block';}if(ph)ph.style.display='none';}
   if(isHeic){
     if(!window.heic2any){await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js';s.onload=res;s.onerror=()=>rej(new Error(''));document.head.appendChild(s);});}
-    try{const blob=await heic2any({blob:file,toType:'image/jpeg',quality:.85});showCatImg(URL.createObjectURL(blob));}catch(e){alert('HEICの変換に失敗しました。JPEGやPNGに変換してください。');}
-  } else {const r=new FileReader();r.onload=e=>showCatImg(e.target.result);r.readAsDataURL(file);}
+    try{const blob=await heic2any({blob:file,toType:'image/jpeg',quality:.85});const src=URL.createObjectURL(blob);showCatImg(src);saveCatImg(src);}catch(e){alert('HEICの変換に失敗しました。JPEGやPNGに変換してください。');}
+  } else {const r=new FileReader();r.onload=e=>{showCatImg(e.target.result);saveCatImg(e.target.result);};r.readAsDataURL(file);}
 }
 
 // ===== 記事画像 =====
@@ -628,6 +681,7 @@ function submitPost(){
     currentPage=1;
   }
   closePostModal();
+  savePosts();
   renderPosts();
 }
 
@@ -677,6 +731,9 @@ function escHtml(str){return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt
 document.getElementById('editor-area').addEventListener('focus',function(){if(!this.textContent.trim()&&!this.innerHTML.replace(/<br\s*\/?>/gi,'').trim())this.classList.remove('has-content');});
 document.getElementById('editor-area').addEventListener('input',function(){this.style.setProperty('--has-content',this.textContent.trim()?'1':'0');});
 
+loadPosts();
+loadReactions();
+loadCatImg();
 renderPosts();
 initVisitorCount();
 </script>
